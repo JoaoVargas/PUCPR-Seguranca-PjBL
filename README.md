@@ -7,7 +7,7 @@
 	```
 2. Caso tenha JENV configurado execute, se não só ignorar:
 	```sh
-	jenv local
+	jenv local $(cat ./.java-version)
 	```
 3. Compile e execute o projeto com Maven:
 	```sh
