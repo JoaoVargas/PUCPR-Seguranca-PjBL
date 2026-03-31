@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.pucpr</groupId>
-    <artifactId>backend_auth</artifactId>
+    <artifactId>PjBL-Auth</artifactId>
     <version>1.0</version>
 
     <properties>
