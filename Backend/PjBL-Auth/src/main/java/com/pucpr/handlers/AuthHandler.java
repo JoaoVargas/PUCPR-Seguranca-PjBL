@@ -1,80 +1,198 @@
 package com.pucpr.handlers;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.Optional;
+
+import org.mindrot.jbcrypt.BCrypt;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pucpr.model.Usuario;
 import com.pucpr.repository.UsuarioRepository;
 import com.pucpr.service.JwtService;
 import com.sun.net.httpserver.HttpExchange;
-import java.io.IOException;
 
-/**
- * Classe responsável por gerenciar as requisições de Autenticação.
- * Aqui o aluno aprenderá a manipular o corpo de requisições HTTP e
- * aplicar conceitos de hashing e proteção de dados.
- */
 public class AuthHandler {
     private final UsuarioRepository repository;
     private final JwtService jwtService;
+    private final ObjectMapper mapper = new ObjectMapper();
 
     public AuthHandler(UsuarioRepository repository, JwtService jwtService) {
         this.repository = repository;
         this.jwtService = jwtService;
     }
 
-    /**
-     * Gerencia o processo de Login.
-     * Objetivo: Validar credenciais e emitir um passaporte (JWT).
-     */
-    public void handleLogin(HttpExchange exchange) throws IOException {
-        // DICA DIDÁTICA: Em APIs REST, o Login sempre deve ser POST para
-        // garantir que a senha viaje no corpo (body) e não na URL.
-        if (!"POST".equals(exchange.getRequestMethod())) {
-            exchange.sendResponseHeaders(405, -1); // 405 Method Not Allowed
-            return;
+    private static class LoginRequest {
+        public String email;
+        public String senha;
+
+        @Override
+        public String toString() {
+            return "LoginRequest{email='" + email + "', senha='" + senha + "'}";
         }
-
-        // TODO: O ALUNO DEVE IMPLEMENTAR OS SEGUINTES PASSOS:
-
-        // 1. EXTRAÇÃO: Use exchange.getRequestBody() para ler os bytes do JSON enviado.
-        // 2. CONVERSÃO: Transforme esse JSON em um objeto (ex: LoginRequest) usando Jackson.
-
-        // 3. BUSCA E SEGURANÇA:
-        //    a) Busque o usuário no 'repository' pelo e-mail fornecido.
-        //    b) Se existir, use BCrypt.checkpw(senhaInformada, senhaDoArquivo) para validar.
-
-        // 4. REGRA DE OURO DA SEGURANÇA:
-        //    - NUNCA use .equals() ou == para comparar senhas. O BCrypt é a sugestão.
-        //    - Em caso de falha, retorne uma mensagem GENÉRICA (ex: "E-mail ou senha inválidos").
-        //      Revelar qual dos dois está errado ajuda atacantes em técnicas de enumeração.
-
-        // 5. RESPOSTA:
-        //    - Se as credenciais estiverem OK: Gere o Token via jwtService e retorne 200 OK.
-        //    - Se falhar: Retorne 401 Unauthorized com o JSON de erro.
     }
 
-    /**
-     * Gerencia o processo de Cadastro (Registro).
-     * Objetivo: Criar um novo usuário de forma segura.
-     */
+    private static class RegisterRequest {
+        public String nome;
+        public String email;
+        public String senha;
+        public String tipo;
+
+        @Override
+        public String toString() {
+            return "RegisterRequest{nome='" + nome + "', email='" + email + "', senha='" + senha + "', tipo='" + tipo
+                    + "'}";
+        }
+    }
+
+    public void handleLogin(HttpExchange exchange) throws IOException {
+        final String route = "[/auth/login] ";
+
+        try {
+            LoginRequest req = mapper.readValue(exchange.getRequestBody(), LoginRequest.class);
+            System.out.println(route + "Requisição: " + req.toString());
+
+            if (!"POST".equals(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(405, -1);
+                return;
+            }
+
+            if (isBlank(req.email) || isBlank(req.senha)) {
+                System.out.println(route + "Erro. Dados de login incompletos.");
+
+                writeJson(exchange, 400, Map.of("error", "Dados inválidos."));
+                return;
+            }
+
+            Optional<Usuario> optUsuario = repository.findByEmail(req.email);
+
+            if (optUsuario.isEmpty() || !BCrypt.checkpw(req.senha, optUsuario.get().getSenhaHash())) {
+                System.out.println(route + "Erro. " + "E-mail ou senha inválidos para email: " + req.email);
+
+                writeJson(exchange, 401, Map.of("error", "E-mail ou senha inválidos."));
+                return;
+            }
+
+            Usuario usuario = optUsuario.get();
+            String token = gerarTokenDinamico(usuario);
+
+            System.out.println(route + "Sucesso. Token gerado para email: " + req.email);
+
+            writeJson(exchange, 200, Map.of("token", token));
+
+        } catch (IOException | IllegalArgumentException e) {
+            System.out.println(route + "Erro. " + e.getMessage());
+
+            sendJson(exchange, route, 500, "{\"error\":\"Erro interno do servidor\"}");
+        } catch (RuntimeException e) {
+            System.out.println(route + "Erro. " + e.getMessage());
+
+            writeJson(exchange, 500, Map.of("error", "Erro interno do servidor"));
+        }
+    }
+
     public void handleRegister(HttpExchange exchange) throws IOException {
-        if (!"POST".equals(exchange.getRequestMethod())) {
-            exchange.sendResponseHeaders(405, -1);
-            return;
+        final String route = "[/auth/register] ";
+
+        try {
+            RegisterRequest req = mapper.readValue(exchange.getRequestBody(), RegisterRequest.class);
+            System.out.println(route + "Requisição: " + req.toString());
+
+            if (!"POST".equals(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(405, -1);
+                return;
+            }
+
+            if (isBlank(req.nome) || isBlank(req.email) || isBlank(req.senha)) {
+                System.out.println(route + "Erro. Dados de registro incompletos.");
+
+                writeJson(exchange, 400, Map.of("error", "Dados inválidos."));
+                return;
+            }
+
+            if (repository.findByEmail(req.email).isPresent()) {
+                System.out.println(route + "Erro. E-mail já cadastrado.");
+
+                writeJson(exchange, 400, Map.of("error", "E-mail já cadastrado."));
+                return;
+            }
+
+            String senhaHash = BCrypt.hashpw(req.senha, BCrypt.gensalt(12));
+            String tipo = isBlank(req.tipo) ? "USER" : req.tipo;
+
+            Usuario novoUsuario = new Usuario(req.nome, req.email, senhaHash, tipo);
+            repository.save(novoUsuario);
+
+            System.out.println(route + "Sucesso. Usuário cadastrado com sucesso.");
+
+            writeJson(exchange, 201, Map.of("message", "Usuário cadastrado com sucesso."));
+
+        } catch (IllegalArgumentException e) {
+            System.out.println(route + "Erro. " + e.getMessage());
+            
+            sendJson(exchange, route, 400, "{\"error\":\"" + e.getMessage() + "\"}");
+        } catch (IOException | RuntimeException e) {
+            System.out.println(route + "Erro. " + e.getMessage());
+
+            sendJson(exchange, route, 500, "{\"error\":\"Erro interno do servidor\"}");
+        }
+    }
+
+    private void writeJson(HttpExchange exchange, int statusCode, Object body) throws IOException {
+        byte[] response = mapper.writeValueAsString(body).getBytes(StandardCharsets.UTF_8);
+        
+        exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
+        exchange.sendResponseHeaders(statusCode, response.length);
+        try (OutputStream os = exchange.getResponseBody()) {
+            os.write(response);
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private String gerarTokenDinamico(Usuario usuario) {
+        try {
+            Method m = jwtService.getClass().getMethod("generateToken", Usuario.class);
+            return (String) m.invoke(jwtService, usuario);
+        } catch (NoSuchMethodException | IllegalAccessException | IllegalArgumentException
+                | InvocationTargetException ignored) {
         }
 
-        // TODO: O ALUNO DEVE IMPLEMENTAR OS SEGUINTES PASSOS:
+        try {
+            Method m = jwtService.getClass().getMethod("generateToken", String.class, String.class);
+            return (String) m.invoke(jwtService, usuario.getEmail(), usuario.getTipo());
+        } catch (NoSuchMethodException | IllegalAccessException | IllegalArgumentException
+                | InvocationTargetException ignored) {
+        }
 
-        // 1. VALIDAÇÃO DE EXISTÊNCIA:
-        //    Antes de cadastrar, verifique se o e-mail já está em uso no 'repository'.
-        //    Se já existir, interrompa e retorne 400 Bad Request.
+        try {
+            Method m = jwtService.getClass().getMethod("generateToken", String.class);
+            return (String) m.invoke(jwtService, usuario.getEmail());
+        } catch (NoSuchMethodException | IllegalAccessException | IllegalArgumentException
+                | InvocationTargetException ignored) {
+        }
 
-        // 2. CRIPTOGRAFIA (Hashing):
-        //    A senha recebida NUNCA deve chegar ao arquivo em texto claro.
-        //    Gere o hash: BCrypt.hashpw(senhaPura, BCrypt.gensalt(12)).
-        //    O "salt" (fator 12) protege contra ataques de Rainbow Tables.
+        throw new RuntimeException("Método generateToken não encontrado em JwtService.");
+    }
 
-        // 3. PERSISTÊNCIA:
-        //    Crie uma nova instância de Usuario (model) com a senha já HASHEADA.
-        //    Use o repository.save(novoUsuario) para gravar no arquivo JSON.
+    private void sendJson(HttpExchange exchange, String route, int statusCode, String json) throws IOException {
+        exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
+        byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+        exchange.sendResponseHeaders(statusCode, bytes.length);
+        try (var os = exchange.getResponseBody()) {
+            os.write(bytes);
+        }
 
-        // 4. RESPOSTA: Se tudo der certo, retorne 201 Created.
+        if (statusCode >= 400) {
+            System.out.println("[" + route + "] Erro. Retornando: " + json);
+        } else {
+            System.out.println("[" + route + "] Sucesso. Retornando: " + json);
+        }
     }
 }

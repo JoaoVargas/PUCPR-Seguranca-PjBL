@@ -1,19 +1,36 @@
 package com.pucpr.service;
+import java.nio.charset.StandardCharsets;
+import java.util.Date;
+
+import javax.crypto.SecretKey;
+
 import com.pucpr.model.Usuario;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 
-import javax.crypto.SecretKey;
-import java.util.Date;
-
 public class JwtService {
 
-    // TODO: O ALUNO DEVE BUSCAR DE UMA VARIÁVEL DE AMBIENTE (System.getenv)
-    // A chave deve ter pelo menos 256 bits (32 caracteres) para o algoritmo HS256.
-    private final String SECRET_KEY = "sua_chave_secreta_com_pelo_menos_32_caracteres_aqui";
+    private static final String DEFAULT_SECRET_KEY = "sua_chave_secreta_com_pelo_menos_32_caracteres_aqui";
 
     private SecretKey getSigningKey() {
-        return Keys.hmacShaKeyFor(SECRET_KEY.getBytes());
+        return Keys.hmacShaKeyFor(resolveSecret().getBytes(StandardCharsets.UTF_8));
+    }
+
+    private String resolveSecret() {
+        String secret = System.getenv("JWT_SECRET");
+
+        if (secret == null || secret.isBlank()) {
+            secret = DEFAULT_SECRET_KEY;
+        }
+
+        if (secret.getBytes(StandardCharsets.UTF_8).length < 32) {
+            throw new IllegalStateException("JWT_SECRET deve ter pelo menos 32 bytes.");
+        }
+
+        return secret;
     }
 
     /**
@@ -24,15 +41,21 @@ public class JwtService {
      * 4. Assina com a chave e o algoritmo HS256.
      */
     public String generateToken(Usuario user) {
-        // Exemplo de implementação que eles podem seguir ou completar
-        String secret = System.getenv("JWT_SECRET"); // Ensinar boas práticas!
         return Jwts.builder()
                 .subject(user.getEmail())
-                .claim("role", user.getRole())
+                .claim("role", user.getTipo())
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + 900000)) // 15 min
-                .signWith(Keys.hmacShaKeyFor(secret.getBytes()))
+                .signWith(getSigningKey())
                 .compact();
+    }
+
+    private Claims parseClaims(String token) {
+        return Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
     }
 
     /**
@@ -42,8 +65,12 @@ public class JwtService {
      * 2. Retornar o Subject do Payload.
      */
     public String extractEmail(String token) {
-        return null;
-        //Seu código aqui
+        return parseClaims(token).getSubject();
+    }
+
+    public String extractRole(String token) {
+        Object role = parseClaims(token).get("role");
+        return role != null ? role.toString() : null;
     }
 
     /**
@@ -54,14 +81,10 @@ public class JwtService {
      * 3. Retornar true se o token for válido e false caso capture uma exceção.
      */
     public boolean validateToken(String token) {
-        // TODO: O ALUNO DEVE IMPLEMENTAR
         try {
-            // 1. Use o Jwts.parser() para descriptografar o token usando a mesma SECRET_KEY da geração.
-            // 2. A biblioteca JJWT joga uma exceção automaticamente se o token estiver expirado ou a assinatura for inválida.
-            // 3. Se o parse ocorrer sem erros, o token é íntegro. Retorne true.
+            parseClaims(token);
             return true;
-        } catch (Exception e) {
-            // 4. Capture exceções específicas (ExpiredJwtException, SignatureException) e logue o erro para debug.
+        } catch (JwtException | IllegalArgumentException e) {
             return false;
         }
     }

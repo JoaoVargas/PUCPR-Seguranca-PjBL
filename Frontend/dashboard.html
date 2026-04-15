@@ -234,6 +234,119 @@
       margin-bottom: .2rem;
     }
 
+    /* ── Admin panel ── */
+    .admin-panel {
+      margin-top: 1.5rem;
+      background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+      border: 1px solid rgba(46, 134, 193, .18);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 1.4rem 1.5rem;
+    }
+
+    .admin-panel__header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .admin-panel__eyebrow {
+      font-size: .72rem;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: .3rem;
+    }
+
+    .admin-panel h3 {
+      color: var(--primary);
+      font-size: 1rem;
+      margin: 0;
+    }
+
+    .admin-panel__subtitle {
+      color: var(--muted);
+      font-size: .88rem;
+      margin-top: .35rem;
+    }
+
+    .admin-count {
+      flex: 0 0 auto;
+      background: var(--light);
+      color: var(--primary);
+      font-size: .78rem;
+      font-weight: 700;
+      padding: .35rem .65rem;
+      border-radius: 999px;
+    }
+
+    .admin-table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .admin-table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 640px;
+    }
+
+    .admin-table th,
+    .admin-table td {
+      text-align: left;
+      padding: .9rem 1rem;
+      border-bottom: 1px solid #e5e7eb;
+      vertical-align: top;
+      font-size: .88rem;
+    }
+
+    .admin-table th {
+      background: #f8fafc;
+      color: var(--muted);
+      font-size: .73rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .admin-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .admin-table code {
+      font-family: monospace;
+      font-size: .84rem;
+      color: var(--primary);
+    }
+
+    .admin-table .tag {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: .2rem .55rem;
+      border-radius: 999px;
+      background: #eef6ff;
+      color: #164e7a;
+      font-size: .72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+
+    .admin-empty {
+      margin-top: .75rem;
+      color: var(--muted);
+      font-size: .88rem;
+    }
+
+    .admin-error {
+      color: var(--danger);
+    }
+
     /* ── Overlay de carregamento ── */
     #loading {
       position: fixed;
@@ -318,9 +431,43 @@
       </div>
     </div>
 
+    <section class="admin-panel" id="admin-panel" hidden>
+      <div class="admin-panel__header">
+        <div>
+          <div class="admin-panel__eyebrow">Área administrativa</div>
+          <h3>Lista de usuários</h3>
+          <p class="admin-panel__subtitle">Somente contas ADMIN conseguem visualizar estes dados.</p>
+        </div>
+        <div class="admin-count" id="admin-count">0 usuários</div>
+      </div>
+
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nome</th>
+              <th>E-mail</th>
+              <th>Perfil</th>
+            </tr>
+          </thead>
+          <tbody id="users-table-body">
+            <tr>
+              <td colspan="4">Carregando usuários...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="admin-empty" id="users-empty" hidden></p>
+    </section>
+
   </main>
 
+  <script src="./env.js"></script>
   <script>
+    const API = window.__ENV?.BACKEND_API_URL || 'http://localhost:8080/api';
+
     // ═══════════════════════════════════════════════════════════════
     // AuthStore compartilhado — em produção real, estaria num módulo
     // JS separado importado via <script type="module">
@@ -358,7 +505,12 @@
       }
       document.getElementById('loading').style.display = 'none';
       document.getElementById('main-content').style.display = 'block';
-      renderToken(AuthStore.get());
+      const payload = renderToken(AuthStore.get());
+
+      if (isAdminPayload(payload)) {
+        document.getElementById('admin-panel').hidden = false;
+        loadAdminUsers();
+      }
     });
 
     // ── Decode JWT (sem verificação — apenas visualização didática) ──
@@ -370,7 +522,7 @@
 
     function renderToken(token) {
       const parts = token.split('.');
-      if (parts.length !== 3) return;
+      if (parts.length !== 3) return null;
 
       const [h, p, s] = parts;
       const header = base64UrlDecode(h);
@@ -381,8 +533,9 @@
       document.getElementById('raw-sig').textContent = s;
 
       if (payload) {
+        const role = getRoleLabel(payload);
         document.getElementById('info-email').textContent = payload.sub || '—';
-        document.getElementById('info-role').textContent = payload.role || payload.roles || '—';
+        document.getElementById('info-role').textContent = role || '—';
         document.getElementById('nav-email').textContent = payload.sub || '—';
         document.getElementById('welcome-msg').textContent =
           `Bem-vindo, ${payload.name || payload.sub}! 👋`;
@@ -394,14 +547,108 @@
         document.getElementById('payload-decoded').textContent =
           JSON.stringify(payload, null, 2);
       }
+
+      return payload;
+    }
+
+    function getRoleLabel(payload) {
+      const role = payload?.role ?? payload?.roles ?? '';
+      return Array.isArray(role) ? role[0] : role;
+    }
+
+    function isAdminPayload(payload) {
+      return String(getRoleLabel(payload) || '').toUpperCase() === 'ADMIN';
+    }
+
+    function renderUsers(users) {
+      const body = document.getElementById('users-table-body');
+      const emptyState = document.getElementById('users-empty');
+      const countLabel = document.getElementById('admin-count');
+
+      countLabel.textContent = `${users.length} usuário${users.length === 1 ? '' : 's'}`;
+      body.innerHTML = '';
+
+      if (!users.length) {
+        emptyState.textContent = 'Nenhum usuário cadastrado.';
+        emptyState.hidden = false;
+        body.innerHTML = '<tr><td colspan="4">Sem registros para exibir.</td></tr>';
+        return;
+      }
+
+      emptyState.hidden = true;
+
+      for (const user of users) {
+        const row = document.createElement('tr');
+
+        const idCell = document.createElement('td');
+        idCell.innerHTML = `<code>${escapeHtml(shortenId(user.id))}</code>`;
+
+        const nameCell = document.createElement('td');
+        nameCell.textContent = user.nome || '—';
+
+        const emailCell = document.createElement('td');
+        emailCell.textContent = user.email || '—';
+
+        const roleCell = document.createElement('td');
+        roleCell.innerHTML = `<span class="tag">${escapeHtml(user.tipo || '—')}</span>`;
+
+        row.append(idCell, nameCell, emailCell, roleCell);
+        body.appendChild(row);
+      }
+    }
+
+    function renderUsersError(message) {
+      const body = document.getElementById('users-table-body');
+      const emptyState = document.getElementById('users-empty');
+      const countLabel = document.getElementById('admin-count');
+
+      countLabel.textContent = '0 usuários';
+      emptyState.textContent = message;
+      emptyState.hidden = false;
+      emptyState.classList.add('admin-error');
+      body.innerHTML = `<tr><td colspan="4">${escapeHtml(message)}</td></tr>`;
+    }
+
+    function shortenId(id) {
+      if (!id) return '—';
+      const value = String(id);
+      return value.length > 12 ? `${value.slice(0, 8)}…${value.slice(-4)}` : value;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    async function loadAdminUsers() {
+      const response = await fetchAutenticado(`${API}/users`);
+      if (!response) {
+        return;
+      }
+
+      if (response.status === 403) {
+        renderUsersError('Acesso restrito a administradores.');
+        return;
+      }
+
+      if (!response.ok) {
+        renderUsersError('Não foi possível carregar a lista de usuários.');
+        return;
+      }
+
+      const data = await response.json();
+      renderUsers(Array.isArray(data.users) ? data.users : []);
     }
 
     // ── Logout ─────────────────────────────────────────────────────
     async function logout() {
       const token = AuthStore.get();
-      // Notifica a API para invalidar o token no servidor
       try {
-        await fetch('http://localhost:8080/api/auth/logout', {
+        await fetch(`${API}/auth/logout`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -425,7 +672,6 @@
       });
 
       if (res.status === 401) {
-        console.log("TESTE");
         AuthStore.clear();
         window.location.href = 'index.html';
         return;

@@ -318,11 +318,8 @@
     </div>
   </div>
 
+  <script src="./env.js"></script>
   <script>
-    // ═══════════════════════════════════════════════════════════════
-    // MÓDULO DE AUTENTICAÇÃO — Token armazenado SOMENTE em memória
-    // (NUNCA em localStorage / sessionStorage / cookie sem HttpOnly)
-    // ═══════════════════════════════════════════════════════════════
     const AuthStore = (() => {
       let _token = null;
       return {
@@ -333,7 +330,7 @@
       };
     })();
 
-    const API = 'SUA API';
+    const API = window.__ENV?.BACKEND_API_URL || 'http://localhost:8080/api';
 
     // ── Utilitários de UI ──────────────────────────────────────────
     function showAlert(id, msg, type = 'danger') {
@@ -428,7 +425,7 @@
         const res = await fetch(`${API}/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password: pass })
+          body: JSON.stringify({ email, senha: pass })
         });
 
         const data = await res.json();
@@ -436,6 +433,7 @@
         if (res.ok) {
           // Token salvo apenas em memória — nunca em localStorage!
           AuthStore.set(data.token);
+          sessionStorage.setItem('_auth_bridge', data.token);
           window.location.href = 'dashboard.html';
         } else {
           // Mensagem genérica — não revela se é e-mail ou senha errada
@@ -491,7 +489,7 @@
         const res = await fetch(`${API}/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, email, password: pass })
+          body: JSON.stringify({ nome: name, email: email, senha: pass })
         });
 
         const data = await res.json();

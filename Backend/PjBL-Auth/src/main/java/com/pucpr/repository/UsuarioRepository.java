@@ -10,43 +10,106 @@ import java.util.List;
 import java.util.Optional;
 
 public class UsuarioRepository {
-    private final String FILE_PATH = "usuarios.json";
+
+    private static final String FILE_PATH = "data/usuarios.json";
     private final ObjectMapper mapper = new ObjectMapper();
+    private final File file = new File(FILE_PATH);
+
+    public UsuarioRepository() {
+        ensureStorageFile();
+    }
+
+    private void ensureStorageFile() {
+        if (file.exists()) {
+            return;
+        }
+
+        File parent = file.getParentFile();
+        if (parent != null && !parent.exists()) {
+            parent.mkdirs();
+        }
+
+        try {
+            mapper.writerWithDefaultPrettyPrinter().writeValue(file, new ArrayList<Usuario>());
+        } catch (IOException e) {
+            throw new RuntimeException("Não foi possível criar o arquivo de armazenamento: " + e.getMessage(), e);
+        }
+    }
 
     /**
      * Busca um usuário pelo e-mail dentro do arquivo JSON.
      * * TODO: O ALUNO DEVE IMPLEMENTAR:
      * 1. Carregar a lista completa de usuários usando o método findAll().
-     * 2. Utilizar Java Streams para encontrar o primeiro usuário que possua o e-mail informado.
-     * 3. Importante: A comparação de e-mail deve ser 'case-insensitive' (ignorar maiúsculas/minúsculas).
-     * 4. Retornar um Optional.of(usuario) se encontrar, ou Optional.empty() se não existir.
+     * 2. Utilizar Java Streams para encontrar o primeiro usuário que possua o
+     * e-mail informado.
+     * 3. Importante: A comparação de e-mail deve ser 'case-insensitive' (ignorar
+     * maiúsculas/minúsculas).
+     * 4. Retornar um Optional.of(usuario) se encontrar, ou Optional.empty() se não
+     * existir.
      */
     public Optional<Usuario> findByEmail(String email) {
-        return Optional.empty();
+        if (email == null || email.isBlank()) {
+            return Optional.empty();
+        }
+
+        return findAll().stream()
+                .filter(u -> u.getEmail() != null && u.getEmail().equalsIgnoreCase(email))
+                .findFirst();
     }
 
     /**
      * Retorna todos os usuários cadastrados no arquivo JSON.
      * * TODO: O ALUNO DEVE IMPLEMENTAR:
      * 1. Verificar se o arquivo definido em 'FILE_PATH' existe no sistema.
-     * 2. Se o arquivo NÃO existir, deve retornar uma lista vazia (new ArrayList<>()) para evitar erros.
-     * 3. Se existir, usar o 'mapper.readValue' do Jackson para converter o conteúdo do arquivo
+     * 2. Se o arquivo NÃO existir, deve retornar uma lista vazia (new
+     * ArrayList<>()) para evitar erros.
+     * 3. Se existir, usar o 'mapper.readValue' do Jackson para converter o conteúdo
+     * do arquivo
      * em uma List<Usuario>. Dica: Use 'new TypeReference<List<Usuario>>(){}'.
      */
     public List<Usuario> findAll() {
-        return new ArrayList<>();
+        if (!file.exists()) {
+            return new ArrayList<>();
+        }
+
+        try {
+            return mapper.readValue(file, new TypeReference<List<Usuario>>() {
+            });
+        } catch (IOException e) {
+            return new ArrayList<>();
+        }
     }
 
     /**
      * Salva um novo usuário no arquivo JSON.
      * * TODO: O ALUNO DEVE IMPLEMENTAR:
      * 1. Obter a lista atual de usuários através do findAll().
-     * 2. Verificar se o e-mail do novo usuário já está cadastrado (Regra de Negócio).
+     * 2. Verificar se o e-mail do novo usuário já está cadastrado (Regra de
+     * Negócio).
      * 3. Adicionar o novo objeto à lista.
-     * 4. Utilizar 'mapper.writerWithDefaultPrettyPrinter().writeValue' para gravar a lista
+     * 4. Utilizar 'mapper.writerWithDefaultPrettyPrinter().writeValue' para gravar
+     * a lista
      * atualizada no arquivo, garantindo que o JSON fique legível (formatado).
      */
     public void save(Usuario usuario) throws IOException {
-        // Implementar lógica de persistência
+        List<Usuario> usuarios = findAll();
+
+        boolean emailJaExiste = usuarios.stream()
+                .anyMatch(u -> u.getEmail() != null
+                        && usuario.getEmail() != null
+                        && u.getEmail().equalsIgnoreCase(usuario.getEmail()));
+
+        if (emailJaExiste) {
+            throw new IllegalArgumentException("E-mail já cadastrado.");
+        }
+
+        usuarios.add(usuario);
+
+        File parent = file.getParentFile();
+        if (parent != null && !parent.exists()) {
+            parent.mkdirs();
+        }
+
+        mapper.writerWithDefaultPrettyPrinter().writeValue(file, usuarios);
     }
 }
