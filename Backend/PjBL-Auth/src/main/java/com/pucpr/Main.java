@@ -10,6 +10,7 @@ import com.pucpr.repository.UsuarioRepository;
 import com.pucpr.routes.AuthRoutes;
 import com.pucpr.routes.UsersRoutes;
 import com.pucpr.service.JwtService;
+import com.pucpr.utils.LogUtils;
 import com.sun.net.httpserver.HttpServer;
 
 public class Main {
@@ -25,7 +26,7 @@ public class Main {
         UsersRoutes.register(server, usersHandler);
 
         server.setExecutor(null);
-        System.out.println("Servidor iniciado na porta " + ServerConfig.PORT + "...");
+        LogUtils.info("server", "Servidor iniciado na porta " + ServerConfig.PORT);
         server.start();
     }
 }

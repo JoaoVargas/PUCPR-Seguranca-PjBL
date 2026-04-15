@@ -14,6 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pucpr.model.Usuario;
 import com.pucpr.repository.UsuarioRepository;
 import com.pucpr.service.JwtService;
+import com.pucpr.utils.LogUtils;
 import com.sun.net.httpserver.HttpExchange;
 
 public class AuthHandler {
@@ -50,11 +51,11 @@ public class AuthHandler {
     }
 
     public void handleLogin(HttpExchange exchange) throws IOException {
-        final String route = "[/auth/login] ";
+        final String route = "/auth/login";
 
         try {
             LoginRequest req = mapper.readValue(exchange.getRequestBody(), LoginRequest.class);
-            System.out.println(route + "Requisição: " + req.toString());
+            LogUtils.info(route, "Requisição: " + req);
 
             if (!"POST".equals(exchange.getRequestMethod())) {
                 exchange.sendResponseHeaders(405, -1);
@@ -62,7 +63,7 @@ public class AuthHandler {
             }
 
             if (isBlank(req.email) || isBlank(req.senha)) {
-                System.out.println(route + "Erro. Dados de login incompletos.");
+                LogUtils.error(route, "Dados de login incompletos.");
 
                 writeJson(exchange, 400, Map.of("error", "Dados inválidos."));
                 return;
@@ -71,7 +72,7 @@ public class AuthHandler {
             Optional<Usuario> optUsuario = repository.findByEmail(req.email);
 
             if (optUsuario.isEmpty() || !BCrypt.checkpw(req.senha, optUsuario.get().getSenhaHash())) {
-                System.out.println(route + "Erro. " + "E-mail ou senha inválidos para email: " + req.email);
+                LogUtils.error(route, "E-mail ou senha inválidos para email: " + req.email);
 
                 writeJson(exchange, 401, Map.of("error", "E-mail ou senha inválidos."));
                 return;
@@ -80,27 +81,27 @@ public class AuthHandler {
             Usuario usuario = optUsuario.get();
             String token = gerarTokenDinamico(usuario);
 
-            System.out.println(route + "Sucesso. Token gerado para email: " + req.email);
+            LogUtils.info(route, "Token gerado para email: " + req.email);
 
             writeJson(exchange, 200, Map.of("token", token));
 
         } catch (IOException | IllegalArgumentException e) {
-            System.out.println(route + "Erro. " + e.getMessage());
+            LogUtils.error(route, e.getMessage());
 
             sendJson(exchange, route, 500, "{\"error\":\"Erro interno do servidor\"}");
         } catch (RuntimeException e) {
-            System.out.println(route + "Erro. " + e.getMessage());
+            LogUtils.error(route, e.getMessage());
 
             writeJson(exchange, 500, Map.of("error", "Erro interno do servidor"));
         }
     }
 
     public void handleRegister(HttpExchange exchange) throws IOException {
-        final String route = "[/auth/register] ";
+        final String route = "/auth/register";
 
         try {
             RegisterRequest req = mapper.readValue(exchange.getRequestBody(), RegisterRequest.class);
-            System.out.println(route + "Requisição: " + req.toString());
+            LogUtils.info(route, "Requisição: " + req);
 
             if (!"POST".equals(exchange.getRequestMethod())) {
                 exchange.sendResponseHeaders(405, -1);
@@ -108,14 +109,14 @@ public class AuthHandler {
             }
 
             if (isBlank(req.nome) || isBlank(req.email) || isBlank(req.senha)) {
-                System.out.println(route + "Erro. Dados de registro incompletos.");
+                LogUtils.error(route, "Dados de registro incompletos.");
 
                 writeJson(exchange, 400, Map.of("error", "Dados inválidos."));
                 return;
             }
 
             if (repository.findByEmail(req.email).isPresent()) {
-                System.out.println(route + "Erro. E-mail já cadastrado.");
+                LogUtils.error(route, "E-mail já cadastrado.");
 
                 writeJson(exchange, 400, Map.of("error", "E-mail já cadastrado."));
                 return;
@@ -127,16 +128,16 @@ public class AuthHandler {
             Usuario novoUsuario = new Usuario(req.nome, req.email, senhaHash, tipo);
             repository.save(novoUsuario);
 
-            System.out.println(route + "Sucesso. Usuário cadastrado com sucesso.");
+            LogUtils.info(route, "Usuário cadastrado com sucesso.");
 
             writeJson(exchange, 201, Map.of("message", "Usuário cadastrado com sucesso."));
 
         } catch (IllegalArgumentException e) {
-            System.out.println(route + "Erro. " + e.getMessage());
+            LogUtils.error(route, e.getMessage());
             
             sendJson(exchange, route, 400, "{\"error\":\"" + e.getMessage() + "\"}");
         } catch (IOException | RuntimeException e) {
-            System.out.println(route + "Erro. " + e.getMessage());
+            LogUtils.error(route, e.getMessage());
 
             sendJson(exchange, route, 500, "{\"error\":\"Erro interno do servidor\"}");
         }
@@ -190,9 +191,9 @@ public class AuthHandler {
         }
 
         if (statusCode >= 400) {
-            System.out.println("[" + route + "] Erro. Retornando: " + json);
+            LogUtils.error(route, "Retornando: " + json);
         } else {
-            System.out.println("[" + route + "] Sucesso. Retornando: " + json);
+            LogUtils.info(route, "Retornando: " + json);
         }
     }
 }

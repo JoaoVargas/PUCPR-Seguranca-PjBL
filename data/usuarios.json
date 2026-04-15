@@ -4,4 +4,10 @@
   "email" : "asd@asd.asd",
   "tipo" : "USER",
   "senhaHash" : "$2a$12$nuwyjNdaOhsQUijfCx0QEe6hEouuE8Q02uz3rWWx0SVfoeogEc7xe"
+}, {
+  "id" : "aa40280a-28fa-48f9-b92d-bb9e2d92f83b",
+  "nome" : "Admin",
+  "email" : "admin@admin.com",
+  "tipo" : "ADMIN",
+  "senhaHash" : "$2a$12$kh5JnKxd6NJxK51POLeEeO2SrzPv9awnKr6rDpBIYFN8BfNlEwTAy"
 } ]
