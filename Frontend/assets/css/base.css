@@ -1,0 +1,27 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --primary: #1A3A5C;
+  --accent: #2E86C1;
+  --light: #D6EAF8;
+  --danger: #C0392B;
+  --success: #1E8449;
+  --bg: #F0F4F8;
+  --card: #FFFFFF;
+  --text: #222222;
+  --muted: #6B7280;
+  --border: #CBD5E1;
+  --radius: 10px;
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.10);
+}
+
+body {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: var(--text);
+}
