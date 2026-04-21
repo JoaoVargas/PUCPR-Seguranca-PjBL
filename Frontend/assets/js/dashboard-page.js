@@ -2,6 +2,9 @@ import { API } from "./config.js";
 import { AuthStore } from "./auth-store.js";
 import { escapeHtml } from "./ui.js";
 
+let adminUsersCache = [];
+let currentAdminEmail = "";
+
 function base64UrlDecode(value) {
   let output = value.replace(/-/g, "+").replace(/_/g, "/");
   while (output.length % 4) {
@@ -63,7 +66,11 @@ function shortenId(id) {
   return value.length > 12 ? `${value.slice(0, 8)}...${value.slice(-4)}` : value;
 }
 
-function renderUsers(users) {
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function renderUsers(users, currentUserEmail) {
   const body = document.getElementById("users-table-body");
   const emptyState = document.getElementById("users-empty");
   const countLabel = document.getElementById("admin-count");
@@ -74,7 +81,7 @@ function renderUsers(users) {
   if (!users.length) {
     emptyState.textContent = "Nenhum usuario cadastrado.";
     emptyState.hidden = false;
-    body.innerHTML = '<tr><td colspan="4">Sem registros para exibir.</td></tr>';
+    body.innerHTML = '<tr><td colspan="5">Sem registros para exibir.</td></tr>';
     return;
   }
 
@@ -96,7 +103,24 @@ function renderUsers(users) {
     const roleCell = document.createElement("td");
     roleCell.innerHTML = `<span class="tag">${escapeHtml(user.tipo || "-")}</span>`;
 
-    row.append(idCell, nameCell, emailCell, roleCell);
+    const actionsCell = document.createElement("td");
+    actionsCell.className = "actions-cell";
+
+    const canDelete = normalizeEmail(user.email) !== normalizeEmail(currentUserEmail);
+    if (canDelete) {
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "delete-user-btn";
+      deleteBtn.setAttribute("aria-label", `Excluir usuario ${user.email || user.nome || ""}`);
+      deleteBtn.title = "Excluir usuario";
+      deleteBtn.textContent = "🗑";
+      deleteBtn.addEventListener("click", () => handleDeleteUser(user));
+      actionsCell.appendChild(deleteBtn);
+    } else {
+      actionsCell.textContent = "-";
+    }
+
+    row.append(idCell, nameCell, emailCell, roleCell, actionsCell);
     body.appendChild(row);
   }
 }
@@ -110,7 +134,7 @@ function renderUsersError(message) {
   emptyState.textContent = message;
   emptyState.hidden = false;
   emptyState.classList.add("admin-error");
-  body.innerHTML = `<tr><td colspan="4">${escapeHtml(message)}</td></tr>`;
+  body.innerHTML = `<tr><td colspan="5">${escapeHtml(message)}</td></tr>`;
 }
 
 async function fetchAuthenticated(url, options = {}) {
@@ -154,7 +178,56 @@ async function loadAdminUsers() {
   }
 
   const data = await response.json();
-  renderUsers(Array.isArray(data.users) ? data.users : []);
+  adminUsersCache = Array.isArray(data.users) ? data.users : [];
+  renderUsers(adminUsersCache, currentAdminEmail);
+}
+
+async function handleDeleteUser(user) {
+  if (normalizeEmail(user?.email) === normalizeEmail(currentAdminEmail)) {
+    renderUsersError("Voce nao pode excluir seu proprio usuario.");
+    return;
+  }
+
+  const identifier = user?.id;
+  if (!identifier) {
+    renderUsersError("Usuario invalido para exclusao.");
+    return;
+  }
+
+  const confirmed = window.confirm(`Deseja excluir o usuario ${user.email || user.nome || "selecionado"}?`);
+  if (!confirmed) {
+    return;
+  }
+
+  const response = await fetchAuthenticated(`${API}/users/${encodeURIComponent(identifier)}`, {
+    method: "DELETE"
+  });
+
+  if (!response) {
+    return;
+  }
+
+  if (response.status === 403) {
+    renderUsersError("Acesso restrito a administradores.");
+    return;
+  }
+
+  if (!response.ok) {
+    let message = "Nao foi possivel excluir o usuario.";
+    try {
+      const payload = await response.json();
+      if (payload?.error) {
+        message = payload.error;
+      }
+    } catch {
+      // keep default message when response has no json
+    }
+    renderUsersError(message);
+    return;
+  }
+
+  adminUsersCache = adminUsersCache.filter((item) => item?.id !== identifier);
+  renderUsers(adminUsersCache, currentAdminEmail);
 }
 
 async function logout() {
@@ -188,6 +261,7 @@ function initializePage() {
 
   const payload = renderToken(AuthStore.get());
   if (isAdminPayload(payload)) {
+    currentAdminEmail = payload?.sub || "";
     document.getElementById("admin-panel").hidden = false;
     loadAdminUsers();
   }

@@ -36,17 +36,6 @@ public class UsuarioRepository {
         }
     }
 
-    /**
-     * Busca um usuário pelo e-mail dentro do arquivo JSON.
-     * * TODO: O ALUNO DEVE IMPLEMENTAR:
-     * 1. Carregar a lista completa de usuários usando o método findAll().
-     * 2. Utilizar Java Streams para encontrar o primeiro usuário que possua o
-     * e-mail informado.
-     * 3. Importante: A comparação de e-mail deve ser 'case-insensitive' (ignorar
-     * maiúsculas/minúsculas).
-     * 4. Retornar um Optional.of(usuario) se encontrar, ou Optional.empty() se não
-     * existir.
-     */
     public Optional<Usuario> findByEmail(String email) {
         if (email == null || email.isBlank()) {
             return Optional.empty();
@@ -57,16 +46,16 @@ public class UsuarioRepository {
                 .findFirst();
     }
 
-    /**
-     * Retorna todos os usuários cadastrados no arquivo JSON.
-     * * TODO: O ALUNO DEVE IMPLEMENTAR:
-     * 1. Verificar se o arquivo definido em 'FILE_PATH' existe no sistema.
-     * 2. Se o arquivo NÃO existir, deve retornar uma lista vazia (new
-     * ArrayList<>()) para evitar erros.
-     * 3. Se existir, usar o 'mapper.readValue' do Jackson para converter o conteúdo
-     * do arquivo
-     * em uma List<Usuario>. Dica: Use 'new TypeReference<List<Usuario>>(){}'.
-     */
+    public Optional<Usuario> findById(String id) {
+        if (id == null || id.isBlank()) {
+            return Optional.empty();
+        }
+
+        return findAll().stream()
+                .filter(u -> u.getId() != null && u.getId().equals(id))
+                .findFirst();
+    }
+
     public List<Usuario> findAll() {
         if (!file.exists()) {
             return new ArrayList<>();
@@ -80,17 +69,6 @@ public class UsuarioRepository {
         }
     }
 
-    /**
-     * Salva um novo usuário no arquivo JSON.
-     * * TODO: O ALUNO DEVE IMPLEMENTAR:
-     * 1. Obter a lista atual de usuários através do findAll().
-     * 2. Verificar se o e-mail do novo usuário já está cadastrado (Regra de
-     * Negócio).
-     * 3. Adicionar o novo objeto à lista.
-     * 4. Utilizar 'mapper.writerWithDefaultPrettyPrinter().writeValue' para gravar
-     * a lista
-     * atualizada no arquivo, garantindo que o JSON fique legível (formatado).
-     */
     public void save(Usuario usuario) throws IOException {
         List<Usuario> usuarios = findAll();
 
@@ -111,5 +89,20 @@ public class UsuarioRepository {
         }
 
         mapper.writerWithDefaultPrettyPrinter().writeValue(file, usuarios);
+    }
+
+    public boolean deleteById(String id) throws IOException {
+        if (id == null || id.isBlank()) {
+            return false;
+        }
+
+        List<Usuario> usuarios = findAll();
+        boolean removed = usuarios.removeIf(u -> u.getId() != null && u.getId().equals(id));
+        if (!removed) {
+            return false;
+        }
+
+        mapper.writerWithDefaultPrettyPrinter().writeValue(file, usuarios);
+        return true;
     }
 }
