@@ -33,3 +33,11 @@ java -DJWT_SECRET='troque_por_uma_chave_forte_com_32_ou_mais_bytes' -cp target/P
 
 ## Execução do Frontend
 Abra o arquivo `Frontend/index.html` em seu navegador.
+
+## Credenciais de Teste
+- Admin
+	- Login: admin@admin.com
+	- Senha: ASDasd123
+- Usuario
+	- Login: usuario@usuario.com
+	- Senha: ASDasd123
