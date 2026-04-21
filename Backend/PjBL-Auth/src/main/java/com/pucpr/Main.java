@@ -10,11 +10,14 @@ import com.pucpr.repository.UsuarioRepository;
 import com.pucpr.routes.AuthRoutes;
 import com.pucpr.routes.UsersRoutes;
 import com.pucpr.service.JwtService;
+import com.pucpr.utils.EnvUtils;
 import com.pucpr.utils.LogUtils;
 import com.sun.net.httpserver.HttpServer;
 
 public class Main {
     public static void main(String[] args) throws IOException {
+        EnvUtils.bootstrapJwtSecret();
+
         HttpServer server = HttpServer.create(new InetSocketAddress(ServerConfig.PORT), 0);
 
         UsuarioRepository repository = new UsuarioRepository();

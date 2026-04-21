@@ -13,21 +13,33 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 
 public class JwtService {
+    private static final int MIN_SECRET_BYTES = 32;
+    private final SecretKey signingKey;
 
-    private static final String DEFAULT_SECRET_KEY = "sua_chave_secreta_com_pelo_menos_32_caracteres_aqui";
+    public JwtService() {
+        this.signingKey = loadSigningKey();
+    }
+
+    private SecretKey loadSigningKey() {
+        return Keys.hmacShaKeyFor(resolveSecret().getBytes(StandardCharsets.UTF_8));
+    }
 
     private SecretKey getSigningKey() {
-        return Keys.hmacShaKeyFor(resolveSecret().getBytes(StandardCharsets.UTF_8));
+        return signingKey;
     }
 
     private String resolveSecret() {
         String secret = System.getenv("JWT_SECRET");
 
         if (secret == null || secret.isBlank()) {
-            secret = DEFAULT_SECRET_KEY;
+            secret = System.getProperty("JWT_SECRET");
         }
 
-        if (secret.getBytes(StandardCharsets.UTF_8).length < 32) {
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException("JWT_SECRET não configurada. Defina a variável de ambiente JWT_SECRET ou a propriedade JVM -DJWT_SECRET.");
+        }
+
+        if (secret.getBytes(StandardCharsets.UTF_8).length < MIN_SECRET_BYTES) {
             throw new IllegalStateException("JWT_SECRET deve ter pelo menos 32 bytes.");
         }
 
